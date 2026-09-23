@@ -12,3 +12,8 @@ class PerfilUsuario(str, enum.Enum):
 class TipoConsentimento(str, enum.Enum):
     CADASTRO_LGPD = "CADASTRO_LGPD"
     FIDELIDADE = "FIDELIDADE"
+
+
+class TipoOperacaoUnidade(str, enum.Enum):
+    COMPLETA = "COMPLETA"
+    REDUZIDA = "REDUZIDA"

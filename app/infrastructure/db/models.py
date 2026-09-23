@@ -1,11 +1,12 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.domain.enums import PerfilUsuario, TipoConsentimento
+from app.domain.enums import PerfilUsuario, TipoConsentimento, TipoOperacaoUnidade
 from app.infrastructure.db.session import Base
 
 
@@ -14,8 +15,30 @@ class Unidade(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(sa.String, nullable=False)
+    endereco: Mapped[str] = mapped_column(sa.String, nullable=False)
+    tipo_operacao: Mapped[TipoOperacaoUnidade] = mapped_column(
+        sa.Enum(TipoOperacaoUnidade), nullable=False
+    )
+    ativo: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
 
     usuarios: Mapped[list["Usuario"]] = relationship(back_populates="unidade")
+
+
+class Produto(Base):
+    __tablename__ = "produtos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(sa.String, nullable=False)
+    preco: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    categoria: Mapped[str] = mapped_column(sa.String, nullable=False)
+    sazonal: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    ativo: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
+
+    def ativar(self) -> None:
+        self.ativo = True
+
+    def desativar(self) -> None:
+        self.ativo = False
 
 
 class Usuario(Base):
