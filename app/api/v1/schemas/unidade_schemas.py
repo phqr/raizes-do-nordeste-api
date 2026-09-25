@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel
@@ -26,3 +27,13 @@ class UnidadeResponse(BaseModel):
     endereco: str
     tipo_operacao: TipoOperacaoUnidade
     ativo: bool
+
+
+class ItemCardapioResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    nome: str
+    preco: Decimal
+    categoria: str
+    sazonal: bool

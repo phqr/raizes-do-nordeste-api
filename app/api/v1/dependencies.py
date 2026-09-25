@@ -50,3 +50,12 @@ def exigir_perfis(*perfis_permitidos: PerfilUsuario):
         return usuario
 
     return dependencia
+
+
+def verificar_acesso_unidade(usuario: Usuario, unidade_id: int) -> None:
+    """GERENTE acessa apenas a própria unidade; ADMIN acessa qualquer uma."""
+    if usuario.role == PerfilUsuario.GERENTE and usuario.unidade_id != unidade_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito à sua própria unidade.",
+        )

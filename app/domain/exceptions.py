@@ -8,3 +8,7 @@ class CredenciaisInvalidasError(Exception):
 
 class RefreshTokenInvalidoError(Exception):
     pass
+
+
+class EstoqueInsuficienteError(Exception):
+    pass

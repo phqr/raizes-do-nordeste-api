@@ -7,6 +7,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.enums import PerfilUsuario, TipoConsentimento, TipoOperacaoUnidade
+from app.domain.exceptions import EstoqueInsuficienteError
 from app.infrastructure.db.session import Base
 
 
@@ -22,6 +23,10 @@ class Unidade(Base):
     ativo: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
 
     usuarios: Mapped[list["Usuario"]] = relationship(back_populates="unidade")
+    estoques: Mapped[list["EstoqueUnidade"]] = relationship(back_populates="unidade")
+
+    def possui_produto_disponivel(self, produto_id: int) -> bool:
+        return any(e.produto_id == produto_id and not e.zerado() for e in self.estoques)
 
 
 class Produto(Base):
@@ -34,11 +39,42 @@ class Produto(Base):
     sazonal: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     ativo: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
 
+    estoques: Mapped[list["EstoqueUnidade"]] = relationship(back_populates="produto")
+
     def ativar(self) -> None:
         self.ativo = True
 
     def desativar(self) -> None:
         self.ativo = False
+
+
+class EstoqueUnidade(Base):
+    __tablename__ = "estoque_unidade"
+    __table_args__ = (sa.UniqueConstraint("produto_id", "unidade_id", name="uq_estoque_produto_unidade"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    produto_id: Mapped[int] = mapped_column(ForeignKey("produtos.id"), nullable=False)
+    unidade_id: Mapped[int] = mapped_column(ForeignKey("unidades.id"), nullable=False)
+    quantidade: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+
+    produto: Mapped["Produto"] = relationship(back_populates="estoques")
+    unidade: Mapped["Unidade"] = relationship(back_populates="estoques")
+
+    def tem_saldo_suficiente(self, qtd: int) -> bool:
+        return self.quantidade >= qtd
+
+    def dar_entrada(self, qtd: int) -> None:
+        self.quantidade += qtd
+
+    def dar_baixa(self, qtd: int) -> None:
+        if not self.tem_saldo_suficiente(qtd):
+            raise EstoqueInsuficienteError(
+                f"Saldo insuficiente: disponível {self.quantidade}, solicitado {qtd}."
+            )
+        self.quantidade -= qtd
+
+    def zerado(self) -> bool:
+        return self.quantidade == 0
 
 
 class Usuario(Base):

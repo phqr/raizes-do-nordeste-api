@@ -2,9 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import exigir_perfis, get_current_usuario
-from app.api.v1.schemas.unidade_schemas import UnidadeCreate, UnidadeResponse, UnidadeUpdate
+from app.api.v1.schemas.unidade_schemas import (
+    ItemCardapioResponse,
+    UnidadeCreate,
+    UnidadeResponse,
+    UnidadeUpdate,
+)
 from app.domain.enums import PerfilUsuario
 from app.infrastructure.db.models import Unidade, Usuario
+from app.infrastructure.db.repositories.estoque_repository import EstoqueRepository
 from app.infrastructure.db.repositories.unidade_repository import UnidadeRepository
 from app.infrastructure.db.session import get_db
 
@@ -24,6 +30,14 @@ def obter_unidade(
     if unidade is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unidade não encontrada.")
     return unidade
+
+
+@router.get("/{unidade_id}/cardapio", response_model=list[ItemCardapioResponse])
+def consultar_cardapio(unidade_id: int, db: Session = Depends(get_db), _: Usuario = Depends(get_current_usuario)):
+    if UnidadeRepository(db).obter_por_id(unidade_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unidade não encontrada.")
+
+    return EstoqueRepository(db).listar_cardapio_unidade(unidade_id)
 
 
 @router.post("", response_model=UnidadeResponse, status_code=status.HTTP_201_CREATED)
