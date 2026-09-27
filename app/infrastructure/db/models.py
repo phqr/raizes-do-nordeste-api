@@ -6,8 +6,18 @@ import sqlalchemy as sa
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.domain.enums import PerfilUsuario, TipoConsentimento, TipoOperacaoUnidade
-from app.domain.exceptions import EstoqueInsuficienteError
+from app.domain.enums import (
+    CanalPedido,
+    PerfilUsuario,
+    StatusPedido,
+    TipoConsentimento,
+    TipoOperacaoUnidade,
+)
+from app.domain.exceptions import (
+    EstoqueInsuficienteError,
+    PedidoNaoPodeSerCanceladoError,
+    TransicaoStatusInvalidaError,
+)
 from app.infrastructure.db.session import Base
 
 
@@ -97,6 +107,7 @@ class Usuario(Base):
     consentimentos: Mapped[list["Consentimento"]] = relationship(
         back_populates="usuario", cascade="all, delete-orphan"
     )
+    pedidos: Mapped[list["Pedido"]] = relationship(back_populates="cliente")
 
     def autenticar(self, senha: str) -> bool:
         from app.infrastructure.security.hashing import verificar_senha
@@ -138,3 +149,88 @@ class Consentimento(Base):
 
     def revogar(self) -> None:
         self.aceito = False
+
+
+class Pedido(Base):
+    __tablename__ = "pedidos"
+
+    _TRANSICOES_PERMITIDAS = {
+        StatusPedido.PAGO: (StatusPedido.EM_PREPARO,),
+        StatusPedido.EM_PREPARO: (StatusPedido.PRONTO,),
+        StatusPedido.PRONTO: (StatusPedido.ENTREGUE,),
+    }
+    _STATUS_CANCELAVEIS = (
+        StatusPedido.AGUARDANDO_PAGAMENTO,
+        StatusPedido.PAGO,
+        StatusPedido.EM_PREPARO,
+        StatusPedido.PRONTO,
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
+    unidade_id: Mapped[int] = mapped_column(ForeignKey("unidades.id"), nullable=False)
+    canal_pedido: Mapped[CanalPedido] = mapped_column(sa.Enum(CanalPedido), nullable=False)
+    status: Mapped[StatusPedido] = mapped_column(
+        sa.Enum(StatusPedido), default=StatusPedido.AGUARDANDO_PAGAMENTO, nullable=False
+    )
+    valor_total: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), default=0, nullable=False)
+    desconto_fidelidade: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), default=0, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+
+    cliente: Mapped["Usuario"] = relationship(back_populates="pedidos")
+    unidade: Mapped["Unidade"] = relationship()
+    itens: Mapped[list["ItemPedido"]] = relationship(
+        back_populates="pedido", cascade="all, delete-orphan"
+    )
+
+    def adicionar_item(self, item: "ItemPedido") -> None:
+        self.itens.append(item)
+
+    def calcular_total(self) -> Decimal:
+        subtotal = sum((item.calcular_subtotal() for item in self.itens), Decimal("0"))
+        return subtotal - (self.desconto_fidelidade or Decimal("0"))
+
+    def aplicar_desconto_fidelidade(self, valor: Decimal) -> None:
+        self.desconto_fidelidade = valor
+        self.valor_total = self.calcular_total()
+
+    def confirmar_pagamento(self) -> None:
+        if self.status != StatusPedido.AGUARDANDO_PAGAMENTO:
+            raise TransicaoStatusInvalidaError(
+                f"Pedido no status {self.status.value} não está aguardando pagamento."
+            )
+        self.status = StatusPedido.PAGO
+
+    def avancar_status(self, novo_status: StatusPedido) -> None:
+        permitidos = self._TRANSICOES_PERMITIDAS.get(self.status, ())
+        if novo_status not in permitidos:
+            raise TransicaoStatusInvalidaError(
+                f"Não é possível mudar de {self.status.value} para {novo_status.value}."
+            )
+        self.status = novo_status
+
+    def pode_ser_cancelado(self) -> bool:
+        return self.status in self._STATUS_CANCELAVEIS
+
+    def cancelar(self) -> None:
+        if not self.pode_ser_cancelado():
+            raise PedidoNaoPodeSerCanceladoError(
+                f"Pedido no status {self.status.value} não pode ser cancelado."
+            )
+        self.status = StatusPedido.CANCELADO
+
+
+class ItemPedido(Base):
+    __tablename__ = "itens_pedido"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pedido_id: Mapped[int] = mapped_column(ForeignKey("pedidos.id"), nullable=False)
+    produto_id: Mapped[int] = mapped_column(ForeignKey("produtos.id"), nullable=False)
+    quantidade: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    preco_unitario: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
+
+    pedido: Mapped["Pedido"] = relationship(back_populates="itens")
+    produto: Mapped["Produto"] = relationship()
+
+    def calcular_subtotal(self) -> Decimal:
+        return self.preco_unitario * self.quantidade

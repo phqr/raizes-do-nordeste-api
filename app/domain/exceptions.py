@@ -12,3 +12,15 @@ class RefreshTokenInvalidoError(Exception):
 
 class EstoqueInsuficienteError(Exception):
     pass
+
+
+class ProdutoIndisponivelError(Exception):
+    pass
+
+
+class TransicaoStatusInvalidaError(Exception):
+    pass
+
+
+class PedidoNaoPodeSerCanceladoError(Exception):
+    pass
