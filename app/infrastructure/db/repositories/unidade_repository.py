@@ -9,8 +9,14 @@ class UnidadeRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def listar(self) -> list[Unidade]:
-        return self.db.query(Unidade).order_by(Unidade.nome).all()
+    def listar(self, page: int, limit: int) -> list[Unidade]:
+        return (
+            self.db.query(Unidade)
+            .order_by(Unidade.nome, Unidade.id)
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
 
     def obter_por_id(self, unidade_id: int) -> Optional[Unidade]:
         return self.db.get(Unidade, unidade_id)

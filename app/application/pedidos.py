@@ -18,12 +18,14 @@ def criar_pedido(
     produto_repo = ProdutoRepository(db)
     estoque_repo = EstoqueRepository(db)
 
-    pedido = Pedido(cliente_id=cliente_id, unidade_id=unidade_id, canal_pedido=canal_pedido)
-
+    # Itens repetidos do mesmo produto viram uma linha só, e o estoque é validado pelo total.
+    quantidades: dict[int, int] = {}
     for item in itens:
-        produto_id = item["produto_id"]
-        quantidade = item["quantidade"]
+        quantidades[item["produto_id"]] = quantidades.get(item["produto_id"], 0) + item["quantidade"]
 
+    # Valida todos os itens antes de mexer no estoque, para um erro no meio não deixar baixa pela metade.
+    validados = []
+    for produto_id, quantidade in quantidades.items():
         produto = produto_repo.obter_por_id(produto_id)
         if produto is None or not produto.ativo:
             raise ProdutoIndisponivelError(f"Produto {produto_id} indisponível.")
@@ -36,11 +38,17 @@ def criar_pedido(
         if not estoque.tem_saldo_suficiente(quantidade):
             raise EstoqueInsuficienteError(f"Estoque insuficiente para o produto {produto_id}.")
 
+        validados.append((produto, estoque, quantidade))
+
+    pedido = Pedido(cliente_id=cliente_id, unidade_id=unidade_id, canal_pedido=canal_pedido)
+    for produto, estoque, quantidade in validados:
+        estoque.dar_baixa(quantidade)
         pedido.adicionar_item(
             ItemPedido(produto_id=produto.id, quantidade=quantidade, preco_unitario=produto.preco)
         )
 
     pedido.valor_total = pedido.calcular_total()
+    # O commit do pedido grava junto a baixa de estoque (mesma sessão/transação).
     return PedidoRepository(db).criar(pedido)
 
 
@@ -51,4 +59,12 @@ def atualizar_status_pedido(db: Session, pedido: Pedido, novo_status: StatusPedi
 
 def cancelar_pedido(db: Session, pedido: Pedido) -> Pedido:
     pedido.cancelar()
+
+    # A baixa acontece na criação do pedido, então o cancelamento devolve os itens ao estoque.
+    estoque_repo = EstoqueRepository(db)
+    for item in pedido.itens:
+        estoque = estoque_repo.obter(item.produto_id, pedido.unidade_id)
+        if estoque is not None:
+            estoque.dar_entrada(item.quantidade)
+
     return PedidoRepository(db).salvar(pedido)

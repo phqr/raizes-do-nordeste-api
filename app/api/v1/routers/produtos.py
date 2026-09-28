@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import exigir_perfis, get_current_usuario
@@ -12,8 +12,13 @@ router = APIRouter(prefix="/produtos", tags=["produtos"])
 
 
 @router.get("", response_model=list[ProdutoResponse])
-def listar_produtos(db: Session = Depends(get_db), _: Usuario = Depends(get_current_usuario)):
-    return ProdutoRepository(db).listar()
+def listar_produtos(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(get_current_usuario),
+):
+    return ProdutoRepository(db).listar(page=page, limit=limit)
 
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
@@ -50,7 +55,7 @@ def atualizar_produto(
     if produto is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado.")
 
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    for campo, valor in dados.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(produto, campo, valor)
 
     return repo.atualizar(produto)

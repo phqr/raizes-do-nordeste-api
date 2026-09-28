@@ -6,14 +6,14 @@ from pydantic import BaseModel, Field
 
 class ProdutoCreate(BaseModel):
     nome: str
-    preco: Decimal = Field(gt=0)
+    preco: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
     categoria: str
     sazonal: bool = False
 
 
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
-    preco: Optional[Decimal] = Field(default=None, gt=0)
+    preco: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=2)
     categoria: Optional[str] = None
     sazonal: Optional[bool] = None
 

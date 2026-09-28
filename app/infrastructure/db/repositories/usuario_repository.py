@@ -17,6 +17,9 @@ class UsuarioRepository:
     def obter_por_email(self, email: str) -> Optional[Usuario]:
         return self.db.query(Usuario).filter(Usuario.email == email).first()
 
+    def obter_por_cpf(self, cpf: str) -> Optional[Usuario]:
+        return self.db.query(Usuario).filter(Usuario.cpf == cpf).first()
+
     def criar(self, usuario: Usuario) -> Usuario:
         self.db.add(usuario)
         self.db.commit()

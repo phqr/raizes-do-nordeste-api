@@ -57,7 +57,7 @@ def criar_pedido_endpoint(
                 detail="cliente_id é obrigatório para pedidos criados por atendente.",
             )
         cliente = UsuarioRepository(db).obter_por_id(dados.cliente_id)
-        if cliente is None or cliente.role != PerfilUsuario.CLIENTE:
+        if cliente is None or cliente.role != PerfilUsuario.CLIENTE or not cliente.ativo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado."
             )
@@ -83,19 +83,27 @@ def criar_pedido_endpoint(
 
 @router.get("", response_model=list[PedidoResponse])
 def listar_pedidos(
-    canal_pedido: Optional[CanalPedido] = None,
+    canal_pedido: Optional[CanalPedido] = Query(default=None, alias="canalPedido"),
     status_filtro: Optional[StatusPedido] = Query(default=None, alias="status"),
     unidade_id: Optional[int] = None,
     cliente_id: Optional[int] = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_usuario),
 ):
     if usuario.role == PerfilUsuario.CLIENTE:
         cliente_id = usuario.id
     elif usuario.role in (PerfilUsuario.ATENDENTE, PerfilUsuario.COZINHA, PerfilUsuario.GERENTE):
+        if usuario.unidade_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Usuário sem unidade vinculada."
+            )
         unidade_id = usuario.unidade_id
 
     return PedidoRepository(db).listar(
+        page=page,
+        limit=limit,
         canal_pedido=canal_pedido,
         status=status_filtro,
         unidade_id=unidade_id,

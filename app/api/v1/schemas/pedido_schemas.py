@@ -8,14 +8,17 @@ from app.domain.enums import CanalPedido, StatusPedido
 
 class ItemPedidoCreate(BaseModel):
     produto_id: int
-    quantidade: int = Field(gt=0)
+    quantidade: int = Field(gt=0, le=100)
 
 
 class PedidoCreate(BaseModel):
+    # O contrato do enunciado usa `canalPedido`; `canal_pedido` continua aceito.
+    model_config = {"populate_by_name": True}
+
     unidade_id: int
-    canal_pedido: CanalPedido
+    canal_pedido: CanalPedido = Field(alias="canalPedido")
     cliente_id: Optional[int] = None
-    itens: list[ItemPedidoCreate] = Field(min_length=1)
+    itens: list[ItemPedidoCreate] = Field(min_length=1, max_length=50)
 
 
 class ItemPedidoResponse(BaseModel):
@@ -33,7 +36,7 @@ class PedidoResponse(BaseModel):
     id: int
     cliente_id: int
     unidade_id: int
-    canal_pedido: CanalPedido
+    canal_pedido: CanalPedido = Field(serialization_alias="canalPedido")
     status: StatusPedido
     valor_total: Decimal
     desconto_fidelidade: Decimal

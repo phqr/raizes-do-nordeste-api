@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import exigir_perfis, get_current_usuario
+from app.api.v1.dependencies import exigir_perfis, get_current_usuario, verificar_acesso_unidade
 from app.api.v1.schemas.auth_schemas import (
     AccessTokenResponse,
     CadastroClienteRequest,
@@ -15,6 +15,7 @@ from app.api.v1.schemas.auth_schemas import (
 from app.application.registrar_consentimento import registrar_consentimento
 from app.domain.enums import PerfilUsuario, TipoConsentimento
 from app.infrastructure.db.models import Usuario
+from app.infrastructure.db.repositories.unidade_repository import UnidadeRepository
 from app.infrastructure.db.repositories.usuario_repository import (
     RefreshTokenRepository,
     UsuarioRepository,
@@ -39,9 +40,17 @@ def _emitir_tokens(db: Session, usuario: Usuario) -> TokenResponse:
 
 @router.post("/registrar", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def registrar_cliente(dados: CadastroClienteRequest, db: Session = Depends(get_db)):
+    if not dados.aceite_lgpd:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="É necessário aceitar o consentimento LGPD para se cadastrar.",
+        )
+
     repo = UsuarioRepository(db)
     if repo.obter_por_email(dados.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado.")
+    if dados.cpf and repo.obter_por_cpf(dados.cpf):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF já cadastrado.")
 
     usuario = Usuario(
         nome=dados.nome,
@@ -62,13 +71,29 @@ def registrar_cliente(dados: CadastroClienteRequest, db: Session = Depends(get_d
 def registrar_usuario_interno(
     dados: CadastroUsuarioInternoRequest,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_perfis(PerfilUsuario.GERENTE, PerfilUsuario.ADMIN)),
+    solicitante: Usuario = Depends(exigir_perfis(PerfilUsuario.GERENTE, PerfilUsuario.ADMIN)),
 ):
     if dados.role == PerfilUsuario.CLIENTE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Use /auth/registrar para cadastro de clientes.",
         )
+    if solicitante.role == PerfilUsuario.GERENTE and dados.role == PerfilUsuario.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gerente não pode cadastrar administradores.",
+        )
+    if dados.role != PerfilUsuario.ADMIN and dados.unidade_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="unidade_id é obrigatório para ATENDENTE, COZINHA e GERENTE.",
+        )
+    if dados.unidade_id is not None:
+        verificar_acesso_unidade(solicitante, dados.unidade_id)
+        if UnidadeRepository(db).obter_por_id(dados.unidade_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Unidade não encontrada."
+            )
 
     repo = UsuarioRepository(db)
     if repo.obter_por_email(dados.email):

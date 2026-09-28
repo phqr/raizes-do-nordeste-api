@@ -5,12 +5,15 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.domain.enums import PerfilUsuario
 
+# Limite efetivo do bcrypt: o que passa de 72 bytes é ignorado no hash.
+SENHA_MAX_LENGTH = 72
+
 
 class CadastroClienteRequest(BaseModel):
     nome: str
     email: EmailStr
-    senha: str = Field(min_length=8)
-    cpf: Optional[str] = None
+    senha: str = Field(min_length=8, max_length=SENHA_MAX_LENGTH)
+    cpf: Optional[str] = Field(default=None, pattern=r"^\d{11}$")
     data_nascimento: Optional[date] = None
     aceite_lgpd: bool
 
@@ -18,14 +21,14 @@ class CadastroClienteRequest(BaseModel):
 class CadastroUsuarioInternoRequest(BaseModel):
     nome: str
     email: EmailStr
-    senha: str = Field(min_length=8)
+    senha: str = Field(min_length=8, max_length=SENHA_MAX_LENGTH)
     role: PerfilUsuario
     unidade_id: Optional[int] = None
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    senha: str
+    senha: str = Field(max_length=SENHA_MAX_LENGTH)
 
 
 class RefreshRequest(BaseModel):

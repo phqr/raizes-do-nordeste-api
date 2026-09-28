@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class EntradaEstoqueRequest(BaseModel):
     produto_id: int
     unidade_id: int
-    quantidade: int = Field(gt=0)
+    quantidade: int = Field(gt=0, le=10_000)
 
 
 class EstoqueResponse(BaseModel):
