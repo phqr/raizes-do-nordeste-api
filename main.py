@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.v1.routers import auth, estoque, pedidos, produtos, unidades
+from app.api.v1.routers import auth, estoque, pagamentos, pedidos, produtos, unidades
 
 app = FastAPI(
     title="Raízes do Nordeste API",
@@ -13,7 +13,7 @@ app.include_router(unidades.router)
 app.include_router(produtos.router)
 app.include_router(estoque.router)
 app.include_router(pedidos.router)
-
+app.include_router(pagamentos.router)
 
 @app.get("/health", tags=["health"])
 def health_check():

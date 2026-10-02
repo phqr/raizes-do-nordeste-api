@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
+    gateway_webhook_secret: str
+
     admin_email: str | None = None
     admin_senha: str | None = None
 

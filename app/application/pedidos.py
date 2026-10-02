@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 
+from app.domain.enums import StatusPagamento
 from app.domain.enums import CanalPedido, StatusPedido
 from app.domain.exceptions import EstoqueInsuficienteError, ProdutoIndisponivelError
-from app.infrastructure.db.models import ItemPedido, Pedido
+from app.infrastructure.db.models import EstoqueUnidade, ItemPedido, Pedido, Produto
 from app.infrastructure.db.repositories.estoque_repository import EstoqueRepository
 from app.infrastructure.db.repositories.pedido_repository import PedidoRepository
 from app.infrastructure.db.repositories.produto_repository import ProdutoRepository
@@ -66,5 +67,9 @@ def cancelar_pedido(db: Session, pedido: Pedido) -> Pedido:
         estoque = estoque_repo.obter(item.produto_id, pedido.unidade_id)
         if estoque is not None:
             estoque.dar_entrada(item.quantidade)
+
+    pagamento = pedido.pagamento
+    if pagamento is not None and pagamento.status == StatusPagamento.APROVADO:
+        pagamento.estornar("Estorno por cancelamento do pedido.")
 
     return PedidoRepository(db).salvar(pedido)

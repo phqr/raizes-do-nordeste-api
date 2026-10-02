@@ -24,3 +24,7 @@ class TransicaoStatusInvalidaError(Exception):
 
 class PedidoNaoPodeSerCanceladoError(Exception):
     pass
+
+
+class PagamentoNaoPermitidoError(Exception):
+    pass

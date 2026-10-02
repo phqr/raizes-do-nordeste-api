@@ -34,3 +34,11 @@ class StatusPedido(str, enum.Enum):
     PRONTO = "PRONTO"
     ENTREGUE = "ENTREGUE"
     CANCELADO = "CANCELADO"
+
+
+class StatusPagamento(str, enum.Enum):
+    PENDENTE = "PENDENTE"
+    APROVADO = "APROVADO"
+    RECUSADO = "RECUSADO"
+    FALHA = "FALHA"
+    ESTORNADO = "ESTORNADO"

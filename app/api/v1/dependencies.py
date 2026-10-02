@@ -4,7 +4,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.domain.enums import PerfilUsuario
-from app.infrastructure.db.models import Usuario
+from app.infrastructure.db.models import Usuario, Pedido
 from app.infrastructure.db.repositories.usuario_repository import UsuarioRepository
 from app.infrastructure.db.session import get_db
 from app.infrastructure.security.jwt import decodificar_access_token
@@ -61,4 +61,20 @@ def verificar_acesso_unidade(usuario: Usuario, unidade_id: int) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito à sua própria unidade.",
+        )
+
+
+def verificar_acesso_pedido(usuario: Usuario, pedido: Pedido) -> None:
+    """CLIENTE só acessa os próprios pedidos; staff, os da própria unidade; ADMIN, qualquer um."""
+    if usuario.role == PerfilUsuario.ADMIN:
+        return
+    if usuario.role == PerfilUsuario.CLIENTE:
+        if pedido.cliente_id != usuario.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito ao próprio pedido."
+            )
+        return
+    if pedido.unidade_id != usuario.unidade_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito à sua própria unidade."
         )

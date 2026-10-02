@@ -9,12 +9,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.domain.enums import (
     CanalPedido,
     PerfilUsuario,
+    StatusPagamento,
     StatusPedido,
     TipoConsentimento,
     TipoOperacaoUnidade,
 )
 from app.domain.exceptions import (
     EstoqueInsuficienteError,
+    PagamentoNaoPermitidoError,
     PedidoNaoPodeSerCanceladoError,
     TransicaoStatusInvalidaError,
 )
@@ -182,6 +184,7 @@ class Pedido(Base):
     itens: Mapped[list["ItemPedido"]] = relationship(
         back_populates="pedido", cascade="all, delete-orphan"
     )
+    pagamento: Mapped[Optional["Pagamento"]] = relationship(back_populates="pedido")
 
     def adicionar_item(self, item: "ItemPedido") -> None:
         self.itens.append(item)
@@ -234,3 +237,50 @@ class ItemPedido(Base):
 
     def calcular_subtotal(self) -> Decimal:
         return self.preco_unitario * self.quantidade
+
+
+class Pagamento(Base):
+    __tablename__ = "pagamentos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pedido_id: Mapped[int] = mapped_column(ForeignKey("pedidos.id"), unique=True, nullable=False)
+    status: Mapped[StatusPagamento] = mapped_column(sa.Enum(StatusPagamento), nullable=False)
+    valor: Mapped[Decimal] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    chave_idempotencia: Mapped[str] = mapped_column(sa.String, unique=True, nullable=False)
+    tentativas: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+    motivo: Mapped[Optional[str]] = mapped_column(sa.String, nullable=True)
+
+    pedido: Mapped["Pedido"] = relationship(back_populates="pagamento")
+
+    def ja_processado(self, chave: str) -> bool:
+        return self.chave_idempotencia == chave
+
+    def solicitar(self, chave: str, valor: Decimal) -> None:
+        # Um pedido tem um único pagamento; depois de recusa ou falha ele é reaberto com nova chave.
+        if self.status == StatusPagamento.PENDENTE:
+            raise PagamentoNaoPermitidoError("Já existe um pagamento pendente para este pedido.")
+        self.chave_idempotencia = chave
+        self.valor = valor
+        self.status = StatusPagamento.PENDENTE
+        self.motivo = None
+
+    def registrar_falha(self, motivo: str) -> None:
+        self.status = StatusPagamento.FALHA
+        self.motivo = motivo
+
+    def registrar_callback(self, resultado: StatusPagamento) -> None:
+        if self.status != StatusPagamento.PENDENTE:
+            raise PagamentoNaoPermitidoError(
+                f"Pagamento no status {self.status.value} não aguarda retorno do gateway."
+            )
+        self.status = resultado
+        if resultado == StatusPagamento.RECUSADO:
+            self.motivo = "Pagamento recusado pelo gateway."
+
+    def estornar(self, motivo: str) -> None:
+        if self.status != StatusPagamento.APROVADO:
+            raise PagamentoNaoPermitidoError(
+                f"Pagamento no status {self.status.value} não pode ser estornado."
+            )
+        self.status = StatusPagamento.ESTORNADO
+        self.motivo = motivo

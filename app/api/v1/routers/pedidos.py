@@ -3,7 +3,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import exigir_perfis, get_current_usuario, verificar_acesso_unidade
+from app.api.v1.dependencies import (
+    exigir_perfis,
+    get_current_usuario,
+    verificar_acesso_pedido,
+    verificar_acesso_unidade,
+)
 from app.api.v1.schemas.pedido_schemas import (
     AtualizarStatusRequest,
     PedidoCreate,
@@ -17,28 +22,13 @@ from app.domain.exceptions import (
     ProdutoIndisponivelError,
     TransicaoStatusInvalidaError,
 )
-from app.infrastructure.db.models import Pedido, Usuario
+from app.infrastructure.db.models import Usuario
 from app.infrastructure.db.repositories.pedido_repository import PedidoRepository
 from app.infrastructure.db.repositories.unidade_repository import UnidadeRepository
 from app.infrastructure.db.repositories.usuario_repository import UsuarioRepository
 from app.infrastructure.db.session import get_db
 
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
-
-
-def _verificar_acesso_pedido(usuario: Usuario, pedido: Pedido) -> None:
-    if usuario.role == PerfilUsuario.ADMIN:
-        return
-    if usuario.role == PerfilUsuario.CLIENTE:
-        if pedido.cliente_id != usuario.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito ao próprio pedido."
-            )
-        return
-    if pedido.unidade_id != usuario.unidade_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito à sua própria unidade."
-        )
 
 
 @router.post("", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
@@ -119,7 +109,7 @@ def obter_pedido(
     if pedido is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
-    _verificar_acesso_pedido(usuario, pedido)
+    verificar_acesso_pedido(usuario, pedido)
     return pedido
 
 
@@ -136,7 +126,7 @@ def atualizar_status(
     if pedido is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
-    _verificar_acesso_pedido(usuario, pedido)
+    verificar_acesso_pedido(usuario, pedido)
 
     try:
         return atualizar_status_pedido(db, pedido, dados.status)
@@ -161,7 +151,7 @@ def cancelar(
     if pedido is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
-    _verificar_acesso_pedido(usuario, pedido)
+    verificar_acesso_pedido(usuario, pedido)
 
     try:
         return cancelar_pedido(db, pedido)
