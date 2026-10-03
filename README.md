@@ -12,10 +12,10 @@ Copie o arquivo de variáveis de ambiente e ajuste os valores conforme necessár
 cp .env.example .env  # No Windows: copy .env.example .env
 ```
 
-Aplique as migrations e crie o primeiro usuário ADMIN (necessário porque `/auth/registrar-interno` já exige um GERENTE/ADMIN logado — sem esse seed não há como criar o primeiro usuário interno pela API):
+Aplique as migrations e rode o seed. Ele cria o primeiro usuário ADMIN e os dados de demonstração do Fluxo A: uma unidade, três produtos com estoque, um CLIENTE (`cliente@raizesdonordeste.com`) e um usuário da COZINHA (`cozinha@raizesdonordeste.com`). O ADMIN é `admin@raizesdonordeste.com`, e todos os usuários do seed usam a senha `Demo@1234`. Num banco novo, a unidade e os produtos ficam com IDs a partir de 1:
 ```bash
 alembic upgrade head
-python -m scripts.seed_admin
+python -m scripts.seed
 ```
 
 Rode a API:

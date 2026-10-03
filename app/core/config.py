@@ -13,8 +13,5 @@ class Settings(BaseSettings):
 
     gateway_webhook_secret: str
 
-    admin_email: str | None = None
-    admin_senha: str | None = None
-
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
