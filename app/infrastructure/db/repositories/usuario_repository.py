@@ -61,3 +61,13 @@ class ConsentimentoRepository:
         self.db.commit()
         self.db.refresh(consentimento)
         return consentimento
+
+    def consentimento_ativo(self, usuario_id: int, tipo: TipoConsentimento) -> bool:
+        # Cada aceite ou revogação é um novo registro (mantém o histórico); vale o mais recente.
+        ultimo = (
+            self.db.query(Consentimento)
+            .filter(Consentimento.usuario_id == usuario_id, Consentimento.tipo == tipo)
+            .order_by(Consentimento.id.desc())
+            .first()
+        )
+        return ultimo is not None and ultimo.aceito

@@ -28,3 +28,7 @@ class PedidoNaoPodeSerCanceladoError(Exception):
 
 class PagamentoNaoPermitidoError(Exception):
     pass
+
+
+class ResgateNaoPermitidoError(Exception):
+    pass

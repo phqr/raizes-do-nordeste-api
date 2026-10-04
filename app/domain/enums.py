@@ -42,3 +42,9 @@ class StatusPagamento(str, enum.Enum):
     RECUSADO = "RECUSADO"
     FALHA = "FALHA"
     ESTORNADO = "ESTORNADO"
+
+
+class TipoMovimentoFidelidade(str, enum.Enum):
+    ACUMULO = "ACUMULO"
+    RESGATE = "RESGATE"
+    ESTORNO = "ESTORNO"

@@ -12,15 +12,20 @@ from app.domain.enums import (
     StatusPagamento,
     StatusPedido,
     TipoConsentimento,
+    TipoMovimentoFidelidade,
     TipoOperacaoUnidade,
 )
 from app.domain.exceptions import (
     EstoqueInsuficienteError,
     PagamentoNaoPermitidoError,
     PedidoNaoPodeSerCanceladoError,
+    ResgateNaoPermitidoError,
     TransicaoStatusInvalidaError,
 )
 from app.infrastructure.db.session import Base
+
+# Cada ponto vale R$ 0,05 no resgate (o acúmulo é 1 ponto por R$ 1 gasto).
+VALOR_DO_PONTO_FIDELIDADE = Decimal("0.05")
 
 
 class Unidade(Base):
@@ -189,11 +194,15 @@ class Pedido(Base):
     def adicionar_item(self, item: "ItemPedido") -> None:
         self.itens.append(item)
 
+    def calcular_subtotal(self) -> Decimal:
+        return sum((item.calcular_subtotal() for item in self.itens), Decimal("0"))
+
     def calcular_total(self) -> Decimal:
-        subtotal = sum((item.calcular_subtotal() for item in self.itens), Decimal("0"))
-        return subtotal - (self.desconto_fidelidade or Decimal("0"))
+        return self.calcular_subtotal() - (self.desconto_fidelidade or Decimal("0"))
 
     def aplicar_desconto_fidelidade(self, valor: Decimal) -> None:
+        if valor < 0 or valor > self.calcular_subtotal():
+            raise ResgateNaoPermitidoError("O desconto não pode ser negativo nem maior que o pedido.")
         self.desconto_fidelidade = valor
         self.valor_total = self.calcular_total()
 
@@ -284,3 +293,38 @@ class Pagamento(Base):
             )
         self.status = StatusPagamento.ESTORNADO
         self.motivo = motivo
+
+
+class SaldoFidelidade(Base):
+    __tablename__ = "saldo_fidelidade"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), unique=True, nullable=False)
+    pontos_atuais: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
+
+    def saldo_suficiente(self, pontos: int) -> bool:
+        return self.pontos_atuais >= pontos
+
+    def creditar(self, pontos: int) -> None:
+        self.pontos_atuais += pontos
+
+    def debitar(self, pontos: int) -> None:
+        if not self.saldo_suficiente(pontos):
+            raise ResgateNaoPermitidoError("Saldo de pontos insuficiente.")
+        self.pontos_atuais -= pontos
+
+    def valor_em_reais(self) -> Decimal:
+        return self.pontos_atuais * VALOR_DO_PONTO_FIDELIDADE
+
+
+class MovimentacaoFidelidade(Base):
+    __tablename__ = "movimentacoes_fidelidade"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
+    pedido_id: Mapped[int] = mapped_column(ForeignKey("pedidos.id"), nullable=False)
+    tipo: Mapped[TipoMovimentoFidelidade] = mapped_column(
+        sa.Enum(TipoMovimentoFidelidade), nullable=False
+    )
+    pontos: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
