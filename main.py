@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.error_handlers import registrar_tratamento_de_erros
 from app.api.v1.routers import auth, estoque, fidelidade, pagamentos, pedidos, produtos, unidades
 
 app = FastAPI(
@@ -7,6 +8,8 @@ app = FastAPI(
     version="0.1.0",
     description="API multicanal para a rede de lanchonetes Raízes do Nordeste.",
 )
+
+registrar_tratamento_de_erros(app)
 
 app.include_router(auth.router)
 app.include_router(unidades.router)
