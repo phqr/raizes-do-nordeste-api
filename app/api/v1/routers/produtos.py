@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -13,12 +15,17 @@ router = APIRouter(prefix="/produtos", tags=["produtos"])
 
 @router.get("", response_model=list[ProdutoResponse])
 def listar_produtos(
+    categoria: Optional[str] = Query(default=None, min_length=1),
+    sazonal: Optional[bool] = None,
+    ativo: Optional[bool] = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     _: Usuario = Depends(get_current_usuario),
 ):
-    return ProdutoRepository(db).listar(page=page, limit=limit)
+    return ProdutoRepository(db).listar(
+        page=page, limit=limit, categoria=categoria, sazonal=sazonal, ativo=ativo
+    )
 
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
